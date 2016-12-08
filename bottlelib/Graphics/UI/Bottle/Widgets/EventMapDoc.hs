@@ -143,13 +143,13 @@ makeTreeView size =
                 (titles, inputDocs) = go trees
 
 addToBottomRight :: View -> Widget.Size -> Widget f -> Widget f
-addToBottomRight (View eventMapSize eventMapFrame) size =
-    Widget.animFrame <>~ docFrame
+addToBottomRight (View eventMapSize eventMapLayers) size =
+    Widget.view . View.animLayers . View.layers <>~ docLayers ^. View.layers
     where
-        docFrame =
-            eventMapFrame
-            & Anim.translate (size - eventMapSize)
-            & Anim.layers -~ 10 -- TODO: 10?!
+        docLayers =
+            eventMapLayers
+            & View.layers . traverse %~ Anim.translate (size - eventMapSize)
+            & View.layers . traverse . Anim.layers -~ 10 -- TODO: 10?!
 
 data IsHelpShown = HelpShown | HelpNotShown
     deriving (Eq, Ord, Read, Show)

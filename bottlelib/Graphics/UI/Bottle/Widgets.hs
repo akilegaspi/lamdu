@@ -61,7 +61,7 @@ liftLayerInterval =
     do
         env <- WE.readEnv
         let layerDiff = WE.layerInterval env
-        View.animFrame . Anim.layers -~ layerDiff & return
+        View.animFrames . Anim.layers -~ layerDiff & return
 
 readEnv :: Monad m => WidgetEnvT m Widget.Env
 readEnv = WE.readEnv <&> (^. WE.envCursor) <&> Widget.Env

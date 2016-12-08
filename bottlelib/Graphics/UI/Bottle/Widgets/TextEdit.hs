@@ -134,7 +134,7 @@ makeFocused ::
     Widget (Text, Widget.EventResult)
 makeFocused cursor Style{..} str myId =
     makeUnfocused Style{..} str myId
-    & Widget.animFrame <>~ cursorFrame
+    & Widget.bottomFrame <>~ cursorFrame
     & Widget.mFocus .~
         Just Widget.Focus
         { _focalArea = cursorRect

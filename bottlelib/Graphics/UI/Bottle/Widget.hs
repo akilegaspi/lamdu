@@ -22,7 +22,10 @@ module Graphics.UI.Bottle.Widget
     , Widget(..), view, mEnter, mFocus, eventMap
     , MEnter
     , Focus(..), fEventMap, focalArea
-    , animLayers, animFrame, size, width, height, events
+    , animLayers, size, width, height, events
+    -- , animFrames
+    , bottomFrame
+    -- , animFrame
 
     , isFocused
 
@@ -120,13 +123,19 @@ isFocused = Lens.has (mFocus . Lens._Just)
 empty :: Widget f
 empty = fromView View.empty
 
-{-# INLINE animFrame #-}
-animFrame :: Lens' (Widget a) Anim.Frame
-animFrame = view . View.animFrame
+-- {-# INLINE animFrame #-}
+-- animFrame :: Lens' (Widget a) Anim.Frame
+-- animFrame = view . View.animFrame
+
+-- animFrames :: Lens.Traversal' (Widget a) Anim.Frame
+-- animFrames = view . View.animFrames
 
 {-# INLINE animLayers #-}
 animLayers :: Lens.Traversal' (Widget a) Anim.Layer
-animLayers = animFrame . Anim.layers
+animLayers = view . View.animFrames . Anim.layers
+
+bottomFrame :: Lens.Traversal' (Widget a) Anim.Frame
+bottomFrame = view . View.animLayers . View.layers . Lens.ix 0
 
 {-# INLINE size #-}
 size :: Lens' (Widget a) Size
@@ -200,7 +209,7 @@ backgroundColor layer animId color =
 
 addInnerFrame :: Int -> AnimId -> Draw.Color -> Vector2 R -> Widget a -> Widget a
 addInnerFrame layer animId color frameWidth widget =
-    widget & animFrame %~ mappend emptyRectangle
+    widget & bottomFrame %~ mappend emptyRectangle
     where
         emptyRectangle =
             Anim.emptyRectangle frameWidth (widget ^. size) animId
@@ -311,7 +320,7 @@ newtype CursorConfig = CursorConfig
 renderWithCursor :: CursorConfig -> Widget a -> Anim.Frame
 renderWithCursor CursorConfig{..} widget =
     maybe mempty renderCursor (widget ^? mFocus . Lens._Just . focalArea)
-    & mappend (widget ^. animFrame)
+    & mappend (View.render (widget ^. view))
     where
         minLayer = fromMaybe 0 (Lens.minimumOf animLayers widget)
         cursorLayer = minLayer - 1

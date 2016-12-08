@@ -317,7 +317,7 @@ makeHoleResultWidget resultId holeResult =
         widget <-
             (ExprGuiM.widgetEnv BWidgets.liftLayerInterval <&> (Widget.view %~))
             <*> (makeFocusable resultId <*> mkWidget)
-            <&> Widget.animFrame %~ Anim.mapIdentities (<> (resultSuffix # Widget.toAnimId resultId))
+            <&> Widget.view . View.animFrames %~ Anim.mapIdentities (<> (resultSuffix # Widget.toAnimId resultId))
         return (widget, mkEventMap)
     where
         mkWidget =

@@ -500,7 +500,7 @@ deletionDiagonal thickness animId Anchors.DeletedDefinition view =
     (minLayer - 1) (Draw.Color 1 0 0 1) view
     where
         minLayer =
-            Lens.minimumOf (View.animFrame . Anim.layers) view
+            Lens.minimumOf (View.animFrames . Anim.layers) view
             & fromMaybe 0
 
 makeNameOriginEdit ::
