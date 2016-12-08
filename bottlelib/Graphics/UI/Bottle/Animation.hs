@@ -26,6 +26,7 @@ import           Data.List.Utils (groupOn)
 import           Data.Map (Map, (!))
 import qualified Data.Map.Strict as Map
 import           Data.Maybe (mapMaybe)
+import qualified Data.Set as Set
 import           Data.Vector.Vector2 (Vector2(..))
 import qualified Data.Vector.Vector2 as Vector2
 import           GHC.Generics (Generic)
@@ -116,28 +117,38 @@ advanceState speed = stateInterpolations %~ mapMaybe (advanceInterpolation speed
 
 setNewDest :: Frame -> State -> State
 setNewDest destFrame state =
-    concat
-    [ Map.difference dest cur & Map.toList <&> add
-    , Map.difference cur dest ^.. traverse <&> Deleting
-    , Map.intersectionWith modify dest cur ^.. traverse
-    ] & State
+    go (curFrame ^. frameImages) (destFrame ^. frameImages) & State
     where
-        toMap x = x ^. frameImages <&> withId & Map.fromList
-        withId img = (img ^. iAnimId, img)
-        cur = toMap (currentFrame state)
-        dest = toMap destFrame
-        add (key, destImg) =
-            Modifying (destImg & iRect .~ curRect) (destImg ^. iRect)
+        go (c:cs) (d:ds)
+            | c ^. iAnimId == d ^. iAnimId =
+                modifying d (c ^. iRect) : go cs ds
+        go (c:cs) ds
+            | (c ^. iAnimId) `Set.member` destIds =
+                go cs ds -- c will be treated in its new position
+            | otherwise =
+                Deleting c : go cs ds
+        go [] ds = map goDest ds
+        goDest d =
+            case findPrefix (d ^. iAnimId) curPrefixMap of
+            Nothing -> Rect (d ^. iRect . Rect.center) 0
+            Just (prefix, curRect) ->
+                relocateSubRect (d ^. iRect) (destPrefixMap ! prefix) curRect
+            & modifying d
+        modifying destImage prevRect =
+            Modifying (rImg & iRect .~ prevRect) (destImage ^. iRect)
             where
-                destRect = destImg ^. iRect
-                curRect =
-                    findPrefix key curPrefixMap
-                    & maybe (Rect (destRect ^. Rect.center) 0) genRect
-                genRect prefix = relocateSubRect destRect (destPrefixMap ! prefix) (curPrefixMap ! prefix)
-        modify destImg curImg =
-            Modifying (destImg & iRect .~ curImg ^. iRect) (destImg ^. iRect)
-        curPrefixMap = prefixRects cur
-        destPrefixMap = prefixRects dest
+                rImg
+                    | (destImage ^. iAnimId) `Set.member` duplicateDestIds
+                        = destImage & iUnitImage %~ mappend redX
+                    | otherwise = destImage
+                redX = Draw.tint red unitX
+        curFrame = currentFrame state
+        sortedDestIds = destFrame ^.. frameImages . traverse . iAnimId & List.sort
+        duplicateDestIds =
+            List.group sortedDestIds <&> tail & concat & Set.fromAscList
+        destIds = Set.fromAscList sortedDestIds
+        curPrefixMap = prefixRects curFrame
+        destPrefixMap = prefixRects destFrame
 
 stateMapIdentities :: (AnimId -> AnimId) -> State -> State
 stateMapIdentities mapping =
@@ -197,31 +208,34 @@ draw frame =
             DrawUtils.scale (rect ^. Rect.size) %%
             img
 
-prefixRects :: Map AnimId Image -> Map AnimId Rect
-prefixRects src =
-    Map.fromList . filter (not . null . fst) . map perGroup $ groupOn fst $
-    List.sortOn fst prefixItems
+prefixRects :: Frame -> Map AnimId Rect
+prefixRects srcFrame =
+    do
+        img <- srcFrame ^. frameImages
+        prefix <- List.inits (img ^. iAnimId)
+        return (prefix, img ^. iRect)
+    & List.sortOn fst
+    & groupOn fst
+    <&> perGroup
+    & filter (not . null . fst)
+    & Map.fromList
     where
         perGroup xs =
-            (fst (head xs), List.foldl1' joinRects (map snd xs))
-        prefixItems = do
-            (key, img) <- Map.toList src
-            prefix <- List.inits key
-            return (prefix, img ^. iRect)
-        joinRects a b =
-            Rect {
-                Rect._topLeft = tl,
-                Rect._size = br - tl
+            (fst (head xs), List.foldl1' unionRects (map snd xs))
+        unionRects a b =
+            Rect
+            { Rect._topLeft = tl
+            , Rect._size = br - tl
             }
             where
-                tl =
-                    liftA2 min (a ^. Rect.topLeft) (b ^. Rect.topLeft)
-                br =
-                    liftA2 max (a ^. Rect.bottomRight) (b ^. Rect.bottomRight)
+                tl = liftA2 min (a ^. Rect.topLeft) (b ^. Rect.topLeft)
+                br = liftA2 max (a ^. Rect.bottomRight) (b ^. Rect.bottomRight)
 
-findPrefix :: Ord a => [a] -> Map [a] b -> Maybe [a]
+findPrefix :: Ord a => [a] -> Map [a] b -> Maybe ([a], b)
 findPrefix key dict =
-    List.find (`Map.member` dict) . reverse $ List.inits key
+    (List.inits key & reverse <&> f) ^? traverse . Lens._Just
+    where
+        f prefix = Map.lookup prefix dict <&> (,) prefix
 
 relocateSubRect :: Rect -> Rect -> Rect -> Rect
 relocateSubRect srcSubRect srcSuperRect dstSuperRect =
