@@ -3,7 +3,7 @@
 module Graphics.UI.Bottle.Animation
     ( R, Size
     , Image(..), iAnimId, iUnitImage, iRect
-    , Frame(..), frameImagesMap, unitImages
+    , Frame(..), frameImages, unitImages
     , draw
     , initialState, nextState, currentFrame
     , mapIdentities
@@ -50,7 +50,7 @@ data Image = Image
 Lens.makeLenses ''Image
 
 newtype Frame = Frame
-    { _frameImagesMap :: Map AnimId [Image]
+    { _frameImages :: [Image]
     } deriving (Generic)
 Lens.makeLenses ''Frame
 
@@ -75,10 +75,7 @@ Lens.makeLenses ''State
 
 currentFrame :: State -> Frame
 currentFrame (State interpolations) =
-    interpolations ^.. traverse . interpolationImage
-    <&> f & Map.fromList & Frame
-    where
-        f img = (img ^. iAnimId, [img])
+    interpolations ^.. traverse . interpolationImage & Frame
 
 initialState :: State
 initialState = State []
@@ -117,10 +114,6 @@ advanceInterpolation movement (Deleting img)
 advanceState :: R -> State -> State
 advanceState speed = stateInterpolations %~ mapMaybe (advanceInterpolation speed)
 
-markDuplicates :: [Image] -> Image
-markDuplicates (x:_:_) = x & iUnitImage %~ mappend (Draw.tint red unitX)
-markDuplicates x = head x
-
 setNewDest :: Frame -> State -> State
 setNewDest destFrame state =
     concat
@@ -129,8 +122,10 @@ setNewDest destFrame state =
     , Map.intersectionWith modify dest cur ^.. traverse
     ] & State
     where
-        cur = currentFrame state ^. frameImagesMap <&> head
-        dest = destFrame ^. frameImagesMap <&> markDuplicates
+        toMap x = x ^. frameImages <&> withId & Map.fromList
+        withId img = (img ^. iAnimId, img)
+        cur = toMap (currentFrame state)
+        dest = toMap destFrame
         add (key, destImg) =
             Modifying (destImg & iRect .~ curRect) (destImg ^. iRect)
             where
@@ -162,15 +157,14 @@ nextState movement (Just dest) state =
 
 {-# INLINE images #-}
 images :: Lens.Traversal' Frame Image
-images = frameImagesMap . Lens.traversed . Lens.traversed
+images = frameImages . Lens.traversed
 
 {-# INLINE unitImages #-}
 unitImages :: Lens.Traversal' Frame (Draw.Image ())
 unitImages = images . iUnitImage
 
 simpleFrame :: AnimId -> Draw.Image () -> Frame
-simpleFrame animId image =
-    Frame $ Map.singleton animId [Image animId image (Rect 0 1)]
+simpleFrame animId image = Frame [Image animId image (Rect 0 1)]
 
 sizedFrame :: AnimId -> Size -> Draw.Image () -> Frame
 sizedFrame animId size =
@@ -180,7 +174,7 @@ sizedFrame animId size =
 
 instance Monoid Frame where
     mempty = Frame mempty
-    mappend (Frame m0) (Frame m1) = Frame $ Map.unionWith (++) m0 m1
+    mappend (Frame m0) (Frame m1) = Frame (m0 ++ m1)
 
 unitX :: Draw.Image ()
 unitX = void $ mconcat
@@ -194,17 +188,10 @@ red = Draw.Color 1 0 0 1
 draw :: Frame -> Draw.Image ()
 draw frame =
     frame
-    ^. frameImagesMap
-    & Map.elems
-    <&> markConflicts
-    & concat
+    ^. frameImages
     <&> posImage
     & mconcat
     where
-        redX = Draw.tint red unitX
-        markConflicts imgs@(_:_:_) =
-            imgs <&> iUnitImage %~ mappend redX
-        markConflicts imgs = imgs
         posImage (Image _ img rect) =
             DrawUtils.translate (rect ^. Rect.topLeft) %%
             DrawUtils.scale (rect ^. Rect.size) %%
@@ -252,10 +239,7 @@ relocateSubRect srcSubRect srcSuperRect dstSuperRect =
             fmap (max 1) (srcSuperRect ^. Rect.size)
 
 mapIdentities :: (AnimId -> AnimId) -> Frame -> Frame
-mapIdentities f =
-    frameImagesMap %~ Map.fromList . map g . Map.toList
-    where
-        g (animId, imgs) = (f animId, imgs <&> iAnimId %~ f)
+mapIdentities f = frameImages . traverse . iAnimId %~ f
 
 unitSquare :: AnimId -> Frame
 unitSquare animId = simpleFrame animId DrawUtils.square
