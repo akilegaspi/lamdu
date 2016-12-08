@@ -2,7 +2,7 @@
 
 module Graphics.UI.Bottle.Animation
     ( R, Size
-    , Image(..), iUnitImage, iRect
+    , Image(..), iAnimId, iUnitImage, iRect
     , Frame(..), frameImagesMap, unitImages
     , draw
     , initialState, nextState, currentFrame
@@ -40,7 +40,8 @@ import           Prelude.Compat
 type Size = Vector2 R
 
 data Image = Image
-    { _iUnitImage :: !(Draw.Image ())
+    { _iAnimId :: AnimId
+    , _iUnitImage :: !(Draw.Image ())
         -- iUnitImage always occupies (0,0)..(1,1),
         -- the translation/scaling occurs when drawing
     , _iRect :: !Rect
@@ -94,7 +95,7 @@ unitImages = images . iUnitImage
 
 simpleFrame :: AnimId -> Draw.Image () -> Frame
 simpleFrame animId image =
-    Frame $ Map.singleton animId [Image image (Rect 0 1)]
+    Frame $ Map.singleton animId [Image animId image (Rect 0 1)]
 
 sizedFrame :: AnimId -> Size -> Draw.Image () -> Frame
 sizedFrame animId size =
@@ -129,7 +130,7 @@ draw frame =
         markConflicts imgs@(_:_:_) =
             imgs <&> iUnitImage %~ mappend redX
         markConflicts imgs = imgs
-        posImage (Image img rect) =
+        posImage (Image _ img rect) =
             DrawUtils.translate (rect ^. Rect.topLeft) %%
             DrawUtils.scale (rect ^. Rect.size) %%
             img
@@ -193,7 +194,10 @@ isVirtuallySame (Frame a) (Frame b) =
         rectMap = Map.mapMaybe (^? Lens.traversed . iRect)
 
 mapIdentities :: (AnimId -> AnimId) -> Frame -> Frame
-mapIdentities f = frameImagesMap %~ Map.mapKeys f
+mapIdentities f =
+    frameImagesMap %~ Map.fromList . map g . Map.toList
+    where
+        g (animId, imgs) = (f animId, imgs <&> iAnimId %~ f)
 
 makeNextFrame :: R -> Frame -> Frame -> Frame
 makeNextFrame movement (Frame dests) (Frame curs) =
