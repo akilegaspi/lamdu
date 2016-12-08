@@ -135,11 +135,10 @@ addBGColor :: Monad m => View -> M m View
 addBGColor view =
     do
         config <- egui ExprGuiM.readConfig
-        let layer = Config.layerAnnotations (Config.layers config) - 1
         let color = Config.typeFrameBGColor config
         bgId <- randAnimId
         view
-            & View.backgroundColor layer bgId color
+            & View.backgroundColor bgId color
             & return
 
 addBackgroundFrame :: Monad m => View -> M m View

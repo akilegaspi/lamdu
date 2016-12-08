@@ -149,7 +149,6 @@ addToBottomRight (View eventMapSize eventMapLayers) size =
         docLayers =
             eventMapLayers
             & View.layers . traverse %~ Anim.translate (size - eventMapSize)
-            & View.layers . traverse . Anim.layers -~ 10 -- TODO: 10?!
 
 data IsHelpShown = HelpShown | HelpNotShown
     deriving (Eq, Ord, Read, Show)
@@ -186,7 +185,7 @@ makeToggledHelpAdder startValue =
                         liftIO $ modifyIORef showingHelpVar toggle
                 let bgHelpView =
                         helpView
-                        & View.backgroundColor 1 animId (configBGColor config)
+                        & View.backgroundColor animId (configBGColor config)
                         & View.tint (transparency 0.8) -- TODO: 0.8?!
                 return . addToBottomRight bgHelpView size $
                     Widget.strongerEvents toggleEventMap widget

@@ -22,7 +22,7 @@ import           Control.Monad (void)
 import           Data.Monoid ((<>))
 import           Data.Vector.Vector2 (Vector2(..))
 import qualified Graphics.DrawingCombinators as Draw
-import           Graphics.UI.Bottle.Animation (AnimId, Layer, R)
+import           Graphics.UI.Bottle.Animation (AnimId, R)
 import qualified Graphics.UI.Bottle.Animation as Anim
 
 import           Prelude.Compat
@@ -71,8 +71,8 @@ height = size . _2
 
 -- | Add a diagonal line (top-left to right-bottom). Useful as a
 -- "deletion" GUI annotation
-addDiagonal :: R -> AnimId -> Layer -> Draw.Color -> View -> View
-addDiagonal thickness animId layer color view=
+addDiagonal :: R -> AnimId -> Draw.Color -> View -> View
+addDiagonal thickness animId color view=
     view & animLayers . layers . Lens.reversed . Lens.ix 0 <>~ line
     where
         line =
@@ -87,13 +87,12 @@ addDiagonal thickness animId layer color view=
             & Draw.tint color
             & void
             & Anim.simpleFrame animId
-            & Anim.layers +~ layer
             & Anim.scale (view ^. size)
 
-backgroundColor :: Layer -> AnimId -> Draw.Color -> View -> View
-backgroundColor layer animId color view =
+backgroundColor :: AnimId -> Draw.Color -> View -> View
+backgroundColor animId color view =
     view
-    & animLayers . layers . Lens.ix 0 <>~ Anim.backgroundColor bgAnimId layer color (view ^. size)
+    & animLayers . layers . Lens.ix 0 <>~ Anim.backgroundColor bgAnimId color (view ^. size)
     where
         bgAnimId = animId ++ ["bg"]
 

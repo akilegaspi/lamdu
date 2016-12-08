@@ -1,7 +1,7 @@
 {-# LANGUAGE NoImplicitPrelude, DeriveGeneric, TemplateHaskell, FlexibleInstances, MultiParamTypeClasses, OverloadedStrings #-}
 
 module Graphics.UI.Bottle.Animation
-    ( R, Size, Layer
+    ( R, Size
     , Image(..), iUnitImage, iRect
     , Frame(..), frameImagesMap, unitImages
     , draw
@@ -9,7 +9,7 @@ module Graphics.UI.Bottle.Animation
     , mapIdentities
     , unitSquare, emptyRectangle
     , backgroundColor
-    , translate, scale, layers
+    , translate, scale
     , unitIntoRect
     , simpleFrame, sizedFrame
     , State, stateFrames
@@ -19,7 +19,6 @@ module Graphics.UI.Bottle.Animation
 import           Control.Applicative (liftA2)
 import qualified Control.Lens as Lens
 import           Control.Lens.Operators
-import           Control.Lens.Tuple
 import           Control.Monad (void)
 import qualified Data.List as List
 import           Data.List.Utils (groupOn)
@@ -38,12 +37,10 @@ import qualified Graphics.UI.Bottle.Rect as Rect
 
 import           Prelude.Compat
 
-type Layer = Int
 type Size = Vector2 R
 
 data Image = Image
-    { _iLayer :: !Layer
-    , _iUnitImage :: !(Draw.Image ())
+    { _iUnitImage :: !(Draw.Image ())
         -- iUnitImage always occupies (0,0)..(1,1),
         -- the translation/scaling occurs when drawing
     , _iRect :: !Rect
@@ -91,17 +88,13 @@ nextState movement mNewDest oldState =
 images :: Lens.Traversal' Frame Image
 images = frameImagesMap . Lens.traversed . Lens.traversed
 
-{-# INLINE layers #-}
-layers :: Lens.Traversal' Frame Layer
-layers = images . iLayer
-
 {-# INLINE unitImages #-}
 unitImages :: Lens.Traversal' Frame (Draw.Image ())
 unitImages = images . iUnitImage
 
 simpleFrame :: AnimId -> Draw.Image () -> Frame
 simpleFrame animId image =
-    Frame $ Map.singleton animId [Image 0 image (Rect 0 1)]
+    Frame $ Map.singleton animId [Image image (Rect 0 1)]
 
 sizedFrame :: AnimId -> Size -> Draw.Image () -> Frame
 sizedFrame animId size =
@@ -130,19 +123,16 @@ draw frame =
     <&> markConflicts
     & concat
     <&> posImage
-    & List.sortOn (^. _1) <&> snd
     & mconcat
     where
         redX = Draw.tint red unitX
         markConflicts imgs@(_:_:_) =
             imgs <&> iUnitImage %~ mappend redX
         markConflicts imgs = imgs
-        posImage (Image layer img rect) =
-            ( layer
-            , DrawUtils.translate (rect ^. Rect.topLeft) %%
-                DrawUtils.scale (rect ^. Rect.size) %%
-                img
-            )
+        posImage (Image img rect) =
+            DrawUtils.translate (rect ^. Rect.topLeft) %%
+            DrawUtils.scale (rect ^. Rect.size) %%
+            img
 
 prefixRects :: Map AnimId Image -> Map AnimId Rect
 prefixRects src =
@@ -262,12 +252,11 @@ emptyRectangle (Vector2 fX fY) totalSize@(Vector2 sX sY) animId =
             & (DrawUtils.scale size %%)
             & (DrawUtils.translate origin %%)
 
-backgroundColor :: AnimId -> Layer -> Draw.Color -> Vector2 R -> Frame
-backgroundColor animId layer color size =
+backgroundColor :: AnimId -> Draw.Color -> Vector2 R -> Frame
+backgroundColor animId color size =
     unitSquare animId
     & images . iUnitImage %~ Draw.tint color
     & scale size
-    & layers +~ layer
 
 translate :: Vector2 R -> Frame -> Frame
 translate pos = images . iRect . Rect.topLeft +~ pos

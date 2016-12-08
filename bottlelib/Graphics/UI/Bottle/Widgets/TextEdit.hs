@@ -147,7 +147,6 @@ makeFocused cursor Style{..} str myId =
             Anim.unitSquare (Widget.cursorAnimId ++ ["text"])
             & Anim.unitImages %~ Draw.tint _sCursorColor
             & Anim.unitIntoRect cursorRect
-            & Anim.layers +~ 2 -- TODO: 2?!
 
 mkCursorRect :: Style -> Int -> Text -> Rect
 mkCursorRect Style{..} cursor str = Rect cursorPos cursorSize
